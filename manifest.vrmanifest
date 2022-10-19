@@ -1,0 +1,16 @@
+{
+	"source" : "builtin",
+	"applications": [{
+		"app_key": "iigo.iigoOverlay",
+		"launch_type": "binary",
+		"binary_path_windows": "obm.exe",
+		"is_dashboard_overlay": true,
+
+		"strings": {
+			"en_us": {
+				"name": "iigo's overlay",
+				"description": "iigo's custom overlay"
+			}
+		}
+	}]
+}
