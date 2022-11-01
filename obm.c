@@ -36,6 +36,8 @@ double headpat = 0;
 time_t UnixTime;
 time_t OldTimeUp;
 time_t OldTimeDown;
+int sshour = -1;
+int ssday  = -1;
 clock_t Clocks;
 clock_t OldClocksText;
 
@@ -98,6 +100,7 @@ void * CNOVRGetOpenVRFunctionTable( const char * interfacename )
 struct VR_IVRSystem_FnTable * oSystem;
 struct VR_IVROverlay_FnTable * oOverlay;
 struct VR_IVRApplications_FnTable * oApplications;
+struct VR_IVRScreenshots_FnTable * oScreenshots;
 
 // The OpenVR Overlay handle.
 VROverlayHandle_t overlayID;
@@ -173,7 +176,8 @@ int main()
 		// get the interfaces we expect.
 		oSystem = CNOVRGetOpenVRFunctionTable( IVRSystem_Version );
 		oOverlay = CNOVRGetOpenVRFunctionTable( IVROverlay_Version );
-		oApplications = CNOVRGetOpenVRFunctionTable( IVRApplications_Version);
+		oApplications = CNOVRGetOpenVRFunctionTable( IVRApplications_Version );
+		oScreenshots = CNOVRGetOpenVRFunctionTable( IVRScreenshots_Version );
 	}
 
 	//if (!oApplications->IsApplicationInstalled("iigo.iigoOverlay"))
@@ -236,6 +240,7 @@ int main()
 	}
 
 	int framenumber = 0;
+	int ssframe = 0;
 	int lastlook = 0;
 	float oldheadpat = 0;
 	float oldheat = 0;
@@ -361,6 +366,8 @@ int main()
 		TrackedDeviceIndex_t index;
 
 		VRControllerState_t rightcontrollerstate;
+
+		ScreenshotHandle_t screenshot;
 	
 		index = oSystem->GetTrackedDeviceIndexForControllerRole( ETrackedControllerRole_TrackedControllerRole_RightHand );
 
@@ -385,9 +392,9 @@ int main()
 		viewrayIntersecting = oOverlay->ComputeOverlayIntersection(overlayID, &intersectioninput , &intersectionoutput);
 
 		if (viewrayIntersecting == true)
-			{
-				lastlook = 60;
-			}
+		{
+			lastlook = 60;
+		}
 
 
 		// sets the overlay to be completly transparent by default.
@@ -399,13 +406,47 @@ int main()
 		bool rightactionbuttontouched = rightinputtouched & ACTIONINPUT; // this is defined in the settings define block near top of file, is 2 for the right B button by default.
 
 		if ( lastlook >= 1)
-			{
-				overlayalpha = SmoothStep(.40,.35,intersectionoutput.fDistance);
-				if (rightactionbuttontouched)
-					{
-        			strftime (timebuffer,80,"%y-%m-%d %a",timeinfo);
-					}
-			}
+		{
+			overlayalpha = SmoothStep(.40,.35,intersectionoutput.fDistance);
+		}
+
+		time_t now = time(NULL);
+		struct tm *tm_struct = localtime(&now);
+
+		int hour = tm_struct->tm_hour;
+		int day  = tm_struct->tm_yday;
+
+		if (sshour < 0 || ssday < 0)
+		{
+			sshour = hour;
+			ssday  = day;
+		}
+
+		// breaks on new years will prob fix that before then
+		if (hour > sshour || day > ssday)
+		{
+			EVRScreenshotError ssERR;
+			char path[] = "C:\\Users\\maru\\Documents\\C Programs\\obm\\Screenshots/";
+			char timestamp[] = "20111008070709";
+			char screenshotpath[sizeof path + sizeof timestamp];
+			strcpy(screenshotpath, path);
+			strftime(timestamp, sizeof timestamp, "%Y%m%d%H%M%S", timeinfo);
+			strncat(screenshotpath, timestamp, sizeof timestamp);
+			char screenshotpathvr[sizeof screenshotpath + 4];
+			strcpy(screenshotpathvr, screenshotpath);
+			strncat(screenshotpathvr, "_VR", 4);
+
+			ssERR = oScreenshots->TakeStereoScreenshot(&screenshot, screenshotpath, screenshotpathvr);
+			//ssERR = oScreenshots->TakeStereoScreenshot(&screenshot, "C:\\Users\\maru\\Documents\\C Programs\\obm\\Screenshots/test", "C:\\Users\\maru\\Documents\\C Programs\\obm\\Screenshots/test_VR");
+			printf( "Screenshot (%d).\n", ssERR );
+			sshour = hour;
+			ssday  = day;
+		}
+
+		if ( rightactionbuttontouched )
+		{
+			strftime(timebuffer,80,"%y-%m-%d %a",timeinfo);
+		}
 
 		sprintf( str, "%s%4.0f%%", timebuffer , lowestbattery * 100.);
 		//sprintf( str, "%i", rightcontrollerstate.ulButtonTouched);
@@ -413,7 +454,7 @@ int main()
 
 		if (lowestbattery < .20) 
             {
-            CNFGColor( 0xff2222ff ); // Make Text red when below 15%
+            CNFGColor( 0xff2222ff ); // Make Text red when below 20%
             }
         CNFGDrawText( str, 2);
 
