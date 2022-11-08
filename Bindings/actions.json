@@ -1,0 +1,26 @@
+{
+    "actions": [
+      {
+        "name": "/actions/obm/out/Haptic",
+        "type": "vibration"
+      },
+      {
+        "name": "/actions/obm/in/ShowDate",
+        "requirement": "mandatory",
+        "type": "boolean"
+      }
+    ],
+    "action_sets": [
+      {
+        "name": "/actions/obm",
+        "usage": "leftright"
+      }
+    ],
+
+    "localization": [
+      {
+        "language_tag": "en_US",
+        "/actions/obm/out/Haptic": "Haptic"
+      }
+    ]
+  }

@@ -33,6 +33,7 @@ void rxcb( const char * address, const char * type, void ** parameters )
 
 float heat = 0;
 double headpat = 0;
+int MuteSelf = -1;
 time_t UnixTime;
 time_t OldTimeUp;
 time_t OldTimeDown;
@@ -41,7 +42,11 @@ int ssday  = -1;
 clock_t Clocks;
 clock_t OldClocksText;
 
-void HeadPats2Heat( const char * address, const char * type, void ** parameters )
+// Was the overlay assocated or not?
+int overlayAssociated;
+
+// all of the osc input to the program is handled using global varibles and modified by this function
+void OSCInputManager( const char * address, const char * type, void ** parameters )
 {
 	if ( strcmp(address, "/avatar/parameters/HeadPat") == 0)
 	{
@@ -59,9 +64,25 @@ void HeadPats2Heat( const char * address, const char * type, void ** parameters 
 			}
 		}
 	}
+	// kinda hacky but just resets the heat level when the facestate parameter is toggled
 	if ( strcmp(address, "/avatar/parameters/FaceState") == 0)
 	{
 		heat = 0;
+	}
+
+	// Sets the MuteSelf int parameter -1 is uninitialized
+	if ( strcmp(address, "/avatar/parameters/MuteSelf") == 0)
+	{
+		if ( strcmp(type, ",F") == 0)
+		{
+			MuteSelf = 0;
+		}
+		if ( strcmp(type, ",T") == 0)
+		{
+			MuteSelf = 1;
+		}
+		overlayAssociated = 0;
+		//printf( "MuteSelf (%d) %s.\n", MuteSelf , type);
 	}
 }
 
@@ -101,12 +122,10 @@ struct VR_IVRSystem_FnTable * oSystem;
 struct VR_IVROverlay_FnTable * oOverlay;
 struct VR_IVRApplications_FnTable * oApplications;
 struct VR_IVRScreenshots_FnTable * oScreenshots;
+struct VR_IVRInput_FnTable * oInput;
 
 // The OpenVR Overlay handle.
 VROverlayHandle_t overlayID;
-
-// Was the overlay assocated or not?
-int overlayAssociated;
 
 // Returns the input if between 0 and 1, and if below 0 it returns 0, and if above 1 it returns. 
 float saturate(float d) {
@@ -128,8 +147,9 @@ float SmoothStep(float a, float b, float x)
 // The in game width in meters
 #define INGAMEWIDTH .14
 
-// The settings for the positioning of the overlay relative to the right controller
 #define TAU 6.28318530718
+
+// The settings for the positioning of the overlay relative to the right controller
 #define XANGLE 45 //45
 #define YANGLE 90 //90
 #define ZANGLE -90 //-90
@@ -137,11 +157,19 @@ float SmoothStep(float a, float b, float x)
 #define TRANS2 -.05 //-.05
 #define TRANS3 .24 //.24
 
+// The settings for the positioning of the overlay relative to the hmd
+#define XANGLE_HMD -15 //45
+#define YANGLE_HMD 0 //90
+#define ZANGLE_HMD 180 //-90
+#define TRANS1_HMD 0 //.05
+#define TRANS2_HMD -0.2 //-.05
+#define TRANS3_HMD -0.5 //.24
+
 // Button settings
-#define TOUCHRIGHTB (1ull << 1)
-#define TOUCHRIGHTGRIP (1ull << 2)
-#define TOUCHRIGHTTRIGGER (1ull << 33)
-#define ACTIONINPUT TOUCHRIGHTB
+//#define TOUCHRIGHTB (1ull << 1)
+//#define TOUCHRIGHTGRIP (1ull << 2)
+//#define TOUCHRIGHTTRIGGER (1ull << 33)
+//#define ACTIONINPUT TOUCHRIGHTB
 
 
 
@@ -178,6 +206,7 @@ int main()
 		oOverlay = CNOVRGetOpenVRFunctionTable( IVROverlay_Version );
 		oApplications = CNOVRGetOpenVRFunctionTable( IVRApplications_Version );
 		oScreenshots = CNOVRGetOpenVRFunctionTable( IVRScreenshots_Version );
+		oInput = CNOVRGetOpenVRFunctionTable( IVRInput_Version );
 	}
 
 	//if (!oApplications->IsApplicationInstalled("iigo.iigoOverlay"))
@@ -190,6 +219,23 @@ int main()
 	//		oApplications->SetApplicationAutoLaunch("iigo.iigoOverlay", true);
 	//	}
     //}
+
+	oInput->SetActionManifestPath("C:\\Users\\maru\\Documents\\C Programs\\obm\\Bindings\\actions.json");
+
+	VRActionHandle_t vibrationHandle = 0;
+
+	oInput->GetActionHandle("/actions/obm/out/haptic", &vibrationHandle);
+
+	VRActionHandle_t showDateHandle = 0;
+
+	oInput->GetActionHandle("/actions/obm/in/ShowDate", &showDateHandle);
+
+	VRInputValueHandle_t valueHandle = 0;
+
+	oInput->GetInputSourceHandle("/devices/valve/index_controllerLHR-D46363B0", &valueHandle);
+
+	VRActionSetHandle_t handleLegacy = 0;
+	oInput->GetActionSetHandle("/actions/obm", &handleLegacy);
 
 	{
 		// Generate the overlay.
@@ -247,6 +293,13 @@ int main()
 
 	while( true )
 	{
+		VRActiveActionSet_t actionSet[1];
+		actionSet[0].ulActionSet = handleLegacy;
+		actionSet[0].ulRestrictedToDevice = 0;
+
+		oInput->UpdateActionState( actionSet, sizeof(VRActiveActionSet_t), 1);
+
+
 		CNFGBGColor = 0x00000022; //Black Transparent Background
 		CNFGClearFrame();
 		
@@ -302,9 +355,9 @@ int main()
             }			
 		}
 
-
+		
 		// If the overlay is unassociated, associate it with the right controller.
-		if( !overlayAssociated )
+		if( !overlayAssociated && MuteSelf < 1)
 		{
 			TrackedDeviceIndex_t index;
 			index = oSystem->GetTrackedDeviceIndexForControllerRole( ETrackedControllerRole_TrackedControllerRole_RightHand );
@@ -314,7 +367,7 @@ int main()
 			}
 			else
 			{
-				// We have a ETrackedControllerRole_TrackedControllerRole_LeftHand.  Associate it.
+				// We have a ETrackedControllerRole_TrackedControllerRole_RightHand.  Associate it.
 				EVROverlayError err;
 
 				// Transform that puts the text somewhere reasonable, the euler angles, and transpose values are set using the define block near the top of the file.
@@ -356,6 +409,66 @@ int main()
 				overlayAssociated = true;
 			}
 		}
+
+		if( !overlayAssociated && MuteSelf == 1)
+		{
+			TrackedDeviceIndex_t hmd;
+			for( i = 0; i < k_unMaxTrackedDeviceCount; i++ )
+			{
+				// See if this device has a battery charge.
+				ETrackedDeviceProperty prop;
+				ETrackedPropertyError err;
+				int deviceclass = oSystem->GetTrackedDeviceClass(i);
+				if( deviceclass == ETrackedDeviceClass_TrackedDeviceClass_HMD) 
+				{    
+					hmd = i;
+				}			
+			}
+			{
+				// We have a ETrackedControllerRole_TrackedDeviceClass_HMD.  Associate it.
+				EVROverlayError err;
+
+				// Transform that puts the text somewhere reasonable, the euler angles, and transpose values are set using the define block near the top of the file.
+				HmdMatrix34_t transform = { 0 };
+
+				float X = -XANGLE_HMD*TAU/360;
+				float Y = -YANGLE_HMD*TAU/360;
+				float Z = -ZANGLE_HMD*TAU/360;
+				float cx = cosf(X);
+				float sx = sinf(X);
+				float cy = cosf(Y);
+				float sy = sinf(Y);
+				float cz = cosf(Z);
+				float sz = sinf(Z);
+
+				transform.m[0][0] = cy*cz;
+				transform.m[1][0] = (sx*sy*cz)-(cx*sz);
+				transform.m[2][0] = (cx*sy*cz)+(sx*sz);
+
+				transform.m[0][1] = -(cy*sz);
+				transform.m[1][1] = -((sx*sy*sz)+(cx*cz));
+				transform.m[2][1] = -((cx*sy*sz)-(sx*cz));
+
+				transform.m[0][2] = -sy;
+				transform.m[1][2] = sx*cy;
+				transform.m[2][2] = cx*cy;
+
+				transform.m[0][3] = 0+TRANS1_HMD;
+				transform.m[1][3] = 0+TRANS2_HMD;
+				transform.m[2][3] = 0+TRANS3_HMD;
+
+				// Apply the transform and attach the overlay to that tracked device object.
+				err = oOverlay->SetOverlayTransformTrackedDeviceRelative( overlayID, hmd, &transform );
+
+				// Notify the terminal that this was associated.
+				printf( "Successfully associated your battery status window to the tracked device (%d %d %08x).\n",
+					 err, hmd, overlayID );
+
+				overlayAssociated = true;
+			}
+		}
+
+		
 
 		TrackedDevicePose_t hmdpos;
 
@@ -401,13 +514,20 @@ int main()
 		float overlayalpha = 0;
 
 		// bit mask to only get the touch information for the b button on the right knuckles controller
-		uint64_t rightinputtouched = rightcontrollerstate.ulButtonTouched;
+		//uint64_t rightinputtouched = rightcontrollerstate.ulButtonTouched;
 		
-		bool rightactionbuttontouched = rightinputtouched & ACTIONINPUT; // this is defined in the settings define block near top of file, is 2 for the right B button by default.
+		//bool rightactionbuttontouched = rightinputtouched & ACTIONINPUT; // this is defined in the settings define block near top of file, is 2 for the right B button by default.
 
 		if ( lastlook >= 1)
 		{
 			overlayalpha = SmoothStep(.40,.35,intersectionoutput.fDistance);
+//			oInput->TriggerHapticVibrationAction(vibrationHandle, 0.0f, 0.13044f, 293.66f, 1.0f, valueHandle);
+//			oInput->TriggerHapticVibrationAction(vibrationHandle, 0.0f, 0.13044f, 293.66f, 1.0f, valueHandle);
+		}
+
+		if (MuteSelf == 1)
+		{
+			overlayalpha = 1.00;
 		}
 
 		time_t now = time(NULL);
@@ -443,9 +563,25 @@ int main()
 			ssday  = day;
 		}
 
-		if ( rightactionbuttontouched )
+		InputDigitalActionData_t showDateActionData;
+
+		EVRInputError showDateERR;
+
+		showDateERR = oInput->GetDigitalActionData(showDateHandle, &showDateActionData, sizeof(InputDigitalActionData_t), k_ulInvalidInputValueHandle);
+
+		if(showDateERR != EVRInputError_VRInputError_None)
+		{
+			printf( "ShowDate (%d).\n", showDateERR );
+		}
+
+		//if ( rightactionbuttontouched )
+		if(showDateActionData.bState)
 		{
 			strftime(timebuffer,80,"%y-%m-%d %a",timeinfo);
+			if(lastlook >= 0 && intersectionoutput.fDistance <= .35 && showDateActionData.bChanged)
+			{
+				oInput->TriggerHapticVibrationAction(vibrationHandle, 0.0f, 0.13044f, 293.66f, 1.0f, valueHandle);
+			}
 		}
 
 		sprintf( str, "%s%4.0f%%", timebuffer , lowestbattery * 100.);
@@ -497,7 +633,7 @@ int main()
 		// OSC STUFF
 		// Poll, waiting for up to 10 ms for a message.
 		//int r = minioscPoll( oscin, 15, rxcb );
-		int r = minioscPoll( oscin, 15, HeadPats2Heat );
+		int r = minioscPoll( oscin, 15, OSCInputManager );
 
 		UnixTime = time(NULL);
 		if (UnixTime > (OldTimeDown + 10))
@@ -557,9 +693,6 @@ int main()
 			OldClocksText = Clocks;
 		}
 
-
-
-		
 		if (oldheat != heat)
 		{
 			minioscSend( oscout, "/avatar/parameters/ThatFace", ",f", heat);

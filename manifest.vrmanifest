@@ -5,6 +5,7 @@
 		"launch_type": "binary",
 		"binary_path_windows": "obm.exe",
 		"is_dashboard_overlay": true,
+		"action_manifest_path": "\\Bindings\\actions.json",
 
 		"strings": {
 			"en_us": {
