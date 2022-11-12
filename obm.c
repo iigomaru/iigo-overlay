@@ -422,6 +422,7 @@ int main()
 				if( deviceclass == ETrackedDeviceClass_TrackedDeviceClass_HMD) 
 				{    
 					hmd = i;
+					break;
 				}			
 			}
 			{
