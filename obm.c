@@ -37,8 +37,8 @@ int MuteSelf = -1;
 time_t UnixTime;
 time_t OldTimeUp;
 time_t OldTimeDown;
-int sshour = -1;
-int ssday  = -1;
+//int sshour = -1;
+//int ssday  = -1;
 clock_t Clocks;
 clock_t OldClocksText;
 
@@ -121,7 +121,7 @@ void * CNOVRGetOpenVRFunctionTable( const char * interfacename )
 struct VR_IVRSystem_FnTable * oSystem;
 struct VR_IVROverlay_FnTable * oOverlay;
 struct VR_IVRApplications_FnTable * oApplications;
-struct VR_IVRScreenshots_FnTable * oScreenshots;
+//struct VR_IVRScreenshots_FnTable * oScreenshots;
 struct VR_IVRInput_FnTable * oInput;
 
 // The OpenVR Overlay handle.
@@ -205,7 +205,7 @@ int main()
 		oSystem = CNOVRGetOpenVRFunctionTable( IVRSystem_Version );
 		oOverlay = CNOVRGetOpenVRFunctionTable( IVROverlay_Version );
 		oApplications = CNOVRGetOpenVRFunctionTable( IVRApplications_Version );
-		oScreenshots = CNOVRGetOpenVRFunctionTable( IVRScreenshots_Version );
+		//oScreenshots = CNOVRGetOpenVRFunctionTable( IVRScreenshots_Version );
 		oInput = CNOVRGetOpenVRFunctionTable( IVRInput_Version );
 	}
 
@@ -531,38 +531,38 @@ int main()
 			overlayalpha = 1.00;
 		}
 
-		time_t now = time(NULL);
-		struct tm *tm_struct = localtime(&now);
+		//time_t now = time(NULL);
+		//struct tm *tm_struct = localtime(&now);
 
-		int hour = tm_struct->tm_hour;
-		int day  = tm_struct->tm_yday;
+		//int hour = tm_struct->tm_hour;
+		//int day  = tm_struct->tm_yday;
 
-		if (sshour < 0 || ssday < 0)
-		{
-			sshour = hour;
-			ssday  = day;
-		}
+		//if (sshour < 0 || ssday < 0)
+		//{
+		//	sshour = hour;
+		//	ssday  = day;
+		//}
 
 		// breaks on new years will prob fix that before then
-		if (hour > sshour || day > ssday)
-		{
-			EVRScreenshotError ssERR;
-			char path[] = "C:\\Users\\maru\\Documents\\C Programs\\obm\\Screenshots/";
-			char timestamp[] = "20111008070709";
-			char screenshotpath[sizeof path + sizeof timestamp];
-			strcpy(screenshotpath, path);
-			strftime(timestamp, sizeof timestamp, "%Y%m%d%H%M%S", timeinfo);
-			strncat(screenshotpath, timestamp, sizeof timestamp);
-			char screenshotpathvr[sizeof screenshotpath + 4];
-			strcpy(screenshotpathvr, screenshotpath);
-			strncat(screenshotpathvr, "_VR", 4);
+		//if (hour > sshour || day > ssday)
+		//{
+		//	EVRScreenshotError ssERR;
+		//	char path[] = "C:\\Users\\maru\\Documents\\C Programs\\obm\\Screenshots/";
+		//	char timestamp[] = "20111008070709";
+		//	char screenshotpath[sizeof path + sizeof timestamp];
+		//	strcpy(screenshotpath, path);
+		//	strftime(timestamp, sizeof timestamp, "%Y%m%d%H%M%S", timeinfo);
+		//	strncat(screenshotpath, timestamp, sizeof timestamp);
+		//	char screenshotpathvr[sizeof screenshotpath + 4];
+		//	strcpy(screenshotpathvr, screenshotpath);
+		//	strncat(screenshotpathvr, "_VR", 4);
 
-			ssERR = oScreenshots->TakeStereoScreenshot(&screenshot, screenshotpath, screenshotpathvr);
-			//ssERR = oScreenshots->TakeStereoScreenshot(&screenshot, "C:\\Users\\maru\\Documents\\C Programs\\obm\\Screenshots/test", "C:\\Users\\maru\\Documents\\C Programs\\obm\\Screenshots/test_VR");
-			printf( "Screenshot (%d).\n", ssERR );
-			sshour = hour;
-			ssday  = day;
-		}
+		//	ssERR = oScreenshots->TakeStereoScreenshot(&screenshot, screenshotpath, screenshotpathvr);
+		//	//ssERR = oScreenshots->TakeStereoScreenshot(&screenshot, "C:\\Users\\maru\\Documents\\C Programs\\obm\\Screenshots/test", "C:\\Users\\maru\\Documents\\C Programs\\obm\\Screenshots/test_VR");
+		//	printf( "Screenshot (%d).\n", ssERR );
+		//	sshour = hour;
+		//	ssday  = day;
+		//}
 
 		InputDigitalActionData_t showDateActionData;
 
