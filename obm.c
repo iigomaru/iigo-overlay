@@ -18,6 +18,9 @@
 #include <time.h>
 #include <string.h>
 
+/* config file */
+#include "config.h"
+
 /* Mini-Osc Stuff */
 
 #define MINIOSC_IMPLEMENTATION
@@ -117,52 +120,28 @@ struct VR_IVRInput_FnTable * oInput;
 VROverlayHandle_t overlayID;
 
 /* Returns the input if between 0 and 1, and if below 0 it returns 0, and if above 1 it returns. */
-float saturate(float d) {
+float saturate(float d) 
+{
   const float t = d < 0 ? 0 : d;
   return t > 1 ? 1 : t;
 }
 
 /* https://en.wikipedia.org/wiki/Smoothstep */
 float SmoothStep(float a, float b, float x)
-	{
-		float t = saturate((x - a)/(b - a));
-		return t*t*(3.0 - (2.0*t));
-	}
+{
+	float t = saturate((x - a)/(b - a));
+	return t*t*(3.0 - (2.0*t));
+}
 
-/* The width of the overlay in pixels. */
-#define WIDTH 80
-/* The height of the overlay in pixels. */
-#define HEIGHT 12
-
-/* The in game width in meters */
-#define INGAMEWIDTH .14
-
-#define TAU 6.28318530718
-
-/* The settings for the positioning of the overlay relative to the right controller */
-#define XANGLE 45.0  /* The default value is 45.0  */
-#define YANGLE 90.0  /* The default value is 90.0  */
-#define ZANGLE -90.0 /* The default value is -90.0 */
-#define TRANS1 0.05  /* The default value is 0.05  */
-#define TRANS2 -0.05 /* The default value is -0.05 */
-#define TRANS3 0.24  /* The default value is 0.24  */
-
-/* The settings for the positioning of the overlay relative to the hmd */
-#define XANGLE_HMD -15.0 /* The default value is -15.0 */
-#define YANGLE_HMD 0.0   /* The default value is 0.0   */
-#define ZANGLE_HMD 180.0 /* The default value is 180.0 */
-#define TRANS1_HMD 0.0   /* The default value is 0.0   */
-#define TRANS2_HMD -0.2  /* The default value is -0.2  */
-#define TRANS3_HMD -0.5  /* The default value is -0.5  */
 
 int main()
 {
 	/* OSC STUFF */
 	
 	/* 9000 is the input port, 9001 is the output port. */
-	miniosc * oscin  = minioscInit( 9001, 0, "127.0.0.1", 0 );
-	miniosc * oscout = minioscInit( 0, 9000, "127.0.0.1", 0 );
-	miniosc * oscbut = minioscInit( 0, 9069, "127.0.0.1", 0 );
+	miniosc * oscin  = minioscInit( OSC_INPUTPORT_MAIN, 0, OSC_LOCALHOST, 0 );
+	miniosc * oscout = minioscInit( 0, OSC_OUTPUTPORT_MAIN, OSC_LOCALHOST, 0 );
+	miniosc * oscbut = minioscInit( 0, OSC_OUTPUTPORT_BUTT, OSC_LOCALHOST, 0 );
 	
 	/*
 	 * Create the window, needed for making an OpenGL context, but also
