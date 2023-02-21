@@ -39,7 +39,8 @@ clock_t OldClocksText;
 int overlayAssociated;
 
 /* all of the osc input to the program is handled using global varibles and modified by this function */
-void OSCInputManager( const char * address, const char * type, void ** parameters )
+static void 
+OSCInputManager( const char * address, const char * type, void ** parameters )
 {
 	if ( strcmp(address, "/avatar/parameters/HeadPat") == 0)
 	{
@@ -95,7 +96,8 @@ void HandleMotion( int x, int y, int mask ) { }
 void HandleDestroy() { }
 
 /* This function was copy-pasted from cnovr. */
-void * CNOVRGetOpenVRFunctionTable( const char * interfacename )
+static void * 
+CNOVRGetOpenVRFunctionTable( const char * interfacename )
 {
 	EVRInitError e;
 	char fnTableName[128];
@@ -120,17 +122,51 @@ struct VR_IVRInput_FnTable * oInput;
 VROverlayHandle_t overlayID;
 
 /* Returns the input if between 0 and 1, and if below 0 it returns 0, and if above 1 it returns. */
-float saturate(float d) 
+static float 
+saturate(float d) 
 {
   const float t = d < 0 ? 0 : d;
   return t > 1 ? 1 : t;
 }
 
 /* https://en.wikipedia.org/wiki/Smoothstep */
-float SmoothStep(float a, float b, float x)
+static float 
+SmoothStep(float a, float b, float x)
 {
 	float t = saturate((x - a)/(b - a));
 	return t*t*(3.0 - (2.0*t));
+}
+
+static HmdMatrix34_t 
+EulerToHmdMatrix34_t(double XAngle, double YAngle, double ZAngle, double Trans1, double Trans2, double Trans3)
+{
+	HmdMatrix34_t transform = { 0 };
+	float X = -XAngle*TAU/360;
+	float Y = -YAngle*TAU/360;
+	float Z = -ZAngle*TAU/360;
+	float cx = cosf(X);
+	float sx = sinf(X);
+	float cy = cosf(Y);
+	float sy = sinf(Y);
+	float cz = cosf(Z);
+	float sz = sinf(Z);
+
+	transform.m[0][0] = cy*cz;
+	transform.m[1][0] = (sx*sy*cz)-(cx*sz);
+	transform.m[2][0] = (cx*sy*cz)+(sx*sz);
+
+	transform.m[0][1] = -(cy*sz);
+	transform.m[1][1] = -((sx*sy*sz)+(cx*cz));
+	transform.m[2][1] = -((cx*sy*sz)-(sx*cz));
+
+	transform.m[0][2] = -sy;
+	transform.m[1][2] = sx*cy;
+	transform.m[2][2] = cx*cy;
+
+	transform.m[0][3] = 0+Trans1;
+	transform.m[1][3] = 0+Trans2;
+	transform.m[2][3] = 0+Trans3;
+	return transform;
 }
 
 
@@ -253,6 +289,20 @@ int main()
 		glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, WIDTH, HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, myjunkdata );
 	}
 
+	/* 
+	* Transform for the right hand pos that puts the text somewhere reasonable,
+	* the euler angles, and transpose values are set using 
+	* the config.h include file.
+	*/
+	HmdMatrix34_t rightHandTransform = EulerToHmdMatrix34_t(XANGLE, YANGLE, ZANGLE, TRANS1, TRANS2, TRANS3);
+
+	/* 
+	* Transform for the HMD pos that puts the text somewhere reasonable,
+	* the euler angles, and transpose values are set using
+	* the config.h include file
+	*/
+	HmdMatrix34_t HMDTransform = EulerToHmdMatrix34_t(XANGLE_HMD, YANGLE_HMD, ZANGLE_HMD, TRANS1_HMD, TRANS2_HMD, TRANS3_HMD);
+
 	int framenumber = 0;
 	int ssframe = 0;
 	int lastlook = 0;
@@ -334,41 +384,8 @@ int main()
 				/* We have a ETrackedControllerRole_TrackedControllerRole_RightHand. Associate it. */
 				EVROverlayError err;
 
-				/* 
-				 * Transform that puts the text somewhere reasonable,
-				 * the euler angles, and transpose values are set using 
-				 * the define block near the top of the file.
-				 */
-				HmdMatrix34_t transform = { 0 };
-
-				float X = -XANGLE*TAU/360;
-				float Y = -YANGLE*TAU/360;
-				float Z = -ZANGLE*TAU/360;
-				float cx = cosf(X);
-				float sx = sinf(X);
-				float cy = cosf(Y);
-				float sy = sinf(Y);
-				float cz = cosf(Z);
-				float sz = sinf(Z);
-
-				transform.m[0][0] = cy*cz;
-				transform.m[1][0] = (sx*sy*cz)-(cx*sz);
-				transform.m[2][0] = (cx*sy*cz)+(sx*sz);
-
-				transform.m[0][1] = -(cy*sz);
-				transform.m[1][1] = -((sx*sy*sz)+(cx*cz));
-				transform.m[2][1] = -((cx*sy*sz)-(sx*cz));
-
-				transform.m[0][2] = -sy;
-				transform.m[1][2] = sx*cy;
-				transform.m[2][2] = cx*cy;
-
-				transform.m[0][3] = 0+TRANS1;
-				transform.m[1][3] = 0+TRANS2;
-				transform.m[2][3] = 0+TRANS3;
-
 				/* Apply the transform and attach the overlay to that tracked device object. */
-				err = oOverlay->SetOverlayTransformTrackedDeviceRelative( overlayID, index, &transform );
+				err = oOverlay->SetOverlayTransformTrackedDeviceRelative( overlayID, index, &rightHandTransform );
 
 				/* Notify the terminal that this was associated. */
 				printf( "Successfully associated your battery status window to the tracked device (%d %d %08x).\n",
@@ -380,61 +397,16 @@ int main()
 
 		if( !overlayAssociated && MuteSelf == 1)
 		{
-			TrackedDeviceIndex_t hmd;
-			for( i = 0; i < k_unMaxTrackedDeviceCount; i++ )
-			{
-				ETrackedDeviceProperty prop;
-				ETrackedPropertyError err;
-				int deviceclass = oSystem->GetTrackedDeviceClass(i);
-				if( deviceclass == ETrackedDeviceClass_TrackedDeviceClass_HMD) 
-				{    
-					hmd = i;
-					break;
-				}			
-			}
 			{
 				/* We have a ETrackedControllerRole_TrackedDeviceClass_HMD. Associate it. */
 				EVROverlayError err;
 
-				/* 
-				 * Transform that puts the text somewhere reasonable,
-				 * the euler angles, and transpose values are set using
-				 * the define block near the top of the file.
-				 */
-				HmdMatrix34_t transform = { 0 };
-
-				float X = -XANGLE_HMD*TAU/360;
-				float Y = -YANGLE_HMD*TAU/360;
-				float Z = -ZANGLE_HMD*TAU/360;
-				float cx = cosf(X);
-				float sx = sinf(X);
-				float cy = cosf(Y);
-				float sy = sinf(Y);
-				float cz = cosf(Z);
-				float sz = sinf(Z);
-
-				transform.m[0][0] = cy*cz;
-				transform.m[1][0] = (sx*sy*cz)-(cx*sz);
-				transform.m[2][0] = (cx*sy*cz)+(sx*sz);
-
-				transform.m[0][1] = -(cy*sz);
-				transform.m[1][1] = -((sx*sy*sz)+(cx*cz));
-				transform.m[2][1] = -((cx*sy*sz)-(sx*cz));
-
-				transform.m[0][2] = -sy;
-				transform.m[1][2] = sx*cy;
-				transform.m[2][2] = cx*cy;
-
-				transform.m[0][3] = 0+TRANS1_HMD;
-				transform.m[1][3] = 0+TRANS2_HMD;
-				transform.m[2][3] = 0+TRANS3_HMD;
-
 				/* Apply the transform and attach the overlay to that tracked device object. */
-				err = oOverlay->SetOverlayTransformTrackedDeviceRelative( overlayID, hmd, &transform );
+				err = oOverlay->SetOverlayTransformTrackedDeviceRelative( overlayID, k_unTrackedDeviceIndex_Hmd, &HMDTransform );
 
 				/* Notify the terminal that this was associated. */
 				printf( "Successfully associated your battery status window to the tracked device (%d %d %08x).\n",
-					 err, hmd, overlayID );
+					 err, k_unTrackedDeviceIndex_Hmd, overlayID );
 
 				overlayAssociated = true;
 			}
@@ -447,8 +419,6 @@ int main()
 		VROverlayIntersectionParams_t intersectioninput;
 
 		VROverlayIntersectionResults_t intersectionoutput;
-
-		ScreenshotHandle_t screenshot;
 
 		bool viewrayIntersecting;
 
